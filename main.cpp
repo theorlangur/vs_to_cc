@@ -49,6 +49,40 @@ char* prepare_buffer(char *pBuf, size_t n, fs::path const& cl_cmd)
   return pBuf;
 }
 
+std::string to_lower(std::string s)
+{
+    std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) {return tolower(c); });
+    return s;
+}
+
+std::string find_real_name(fs::path p, std::string search)
+{
+    std::string lower = to_lower(search);
+    for (auto& x : fs::directory_iterator(p))
+    {
+        if (to_lower(x.path().filename().string()) == lower)
+            return x.path().filename().string();
+    }
+    return search;
+}
+
+fs::path to_real_path(fs::path p)
+{
+    if (!p.is_absolute())
+        return p;
+
+    auto i = p.begin();
+    fs::path res(to_lower(i->string()));
+    ++i;
+    res /= *i;
+    for (++i; i != p.end(); ++i)
+    {
+        res /= find_real_name(res, i->string());
+    }
+    res = res.lexically_normal();
+    return res;
+}
+
 nl::json getEntry(fs::path const& cl_cmd)
 {
     nl::json res;
@@ -72,8 +106,8 @@ nl::json getEntry(fs::path const& cl_cmd)
                   char *pCmd = prepare_buffer(cmd, sizeof(cmd), cl_cmd);
                   std::string_view c(pCmd);
                   if (c.find_first_of("/c") == 0) {
-                    res["file"] = file;
-                    res["directory"] = dir;
+                    res["file"] = to_real_path(file).string();
+                    res["directory"] = to_real_path(dir).string();
                     res["command"] = c; // as-is
                   }
                 }
