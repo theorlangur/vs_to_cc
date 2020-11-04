@@ -56,6 +56,7 @@ nl::json getEntry(fs::path const& cl_cmd)
     if (f)
     {
         char buf[2048];
+        std::fill_n(buf, sizeof(buf), 0);
         if (f.getline(buf, sizeof(buf)))
         {
             char *pBuf = prepare_buffer(buf, sizeof(buf), cl_cmd);
@@ -66,6 +67,7 @@ nl::json getEntry(fs::path const& cl_cmd)
               if (slash != file.npos) {
                 std::string_view dir(file.data(), slash + 1);
                 char cmd[2048];
+				std::fill_n(cmd, sizeof(cmd), 0);
                 if (f.getline(cmd, sizeof(cmd))) {
                   char *pCmd = prepare_buffer(cmd, sizeof(cmd), cl_cmd);
                   std::string_view c(pCmd);
