@@ -55,6 +55,12 @@ std::string to_lower(std::string s)
     return s;
 }
 
+std::string to_upper(std::string s)
+{
+    std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) {return toupper(c); });
+    return s;
+}
+
 std::string find_real_name(fs::path p, std::string search)
 {
     std::string lower = to_lower(search);
@@ -66,13 +72,13 @@ std::string find_real_name(fs::path p, std::string search)
     return search;
 }
 
-fs::path to_real_path(fs::path p)
+fs::path to_real_path(fs::path p, bool rev)
 {
     if (!p.is_absolute())
         return p;
 
     auto i = p.begin();
-    fs::path res(to_lower(i->string()));
+    fs::path res(rev ? to_upper(i->string()) : to_lower(i->string()));
     ++i;
     res /= *i;
     for (++i; i != p.end(); ++i)
@@ -83,7 +89,7 @@ fs::path to_real_path(fs::path p)
     return res;
 }
 
-nl::json getEntry(fs::path const& cl_cmd)
+nl::json getEntry(fs::path const& cl_cmd, bool rev)
 {
     nl::json res;
     std::ifstream f(cl_cmd);
@@ -106,8 +112,15 @@ nl::json getEntry(fs::path const& cl_cmd)
                   char *pCmd = prepare_buffer(cmd, sizeof(cmd), cl_cmd);
                   std::string_view c(pCmd);
                   if (c.find_first_of("/c") == 0) {
-                    res["file"] = to_real_path(file).string();
-                    res["directory"] = to_real_path(dir).string();
+                      std::string fstr = to_real_path(file, rev).string();
+                      if (rev)
+                        std::replace(fstr.begin(), fstr.end(), '\\', '/');
+
+                      std::string dstr = to_real_path(dir, rev).string();
+                      if (rev)
+                        std::replace(dstr.begin(), dstr.end(), '\\', '/');
+                    res["file"] = fstr;
+                    res["directory"] = dstr;
                     res["command"] = c; // as-is
                   }
                 }
@@ -121,7 +134,7 @@ nl::json getEntry(fs::path const& cl_cmd)
 struct Options
 {
     std::string prefixOptions;
-
+    bool revert = false;
 };
 
 nl::json createCompileCommands(fs::path const& scan_base, Options const& opt)
@@ -134,7 +147,7 @@ nl::json createCompileCommands(fs::path const& scan_base, Options const& opt)
             if (p.path().filename().string().find("CL.command") == 0)
             {
                 //let's get info
-                nl::json item = getEntry(p.path());
+                nl::json item = getEntry(p.path(), opt.revert);
                 if (item.is_object())
                 {
                     std::string cmd = item["command"];
@@ -175,7 +188,9 @@ int main(int argc, char *argv[])
             ++i;
             opts.prefixOptions += argv[i];
             opts.prefixOptions += ' ';
-        }else if (arg == "--help")
+        }else if (arg == "--revert")
+            opts.revert = true;
+        else if (arg == "--help")
             show_help = true;
     }
 
@@ -185,7 +200,7 @@ int main(int argc, char *argv[])
     if (show_help)
     {
         std::cout << "Usage: \n"
-                  << "vs_to_cc --dir <path-to-win-build-directory> --to <file-to-save-json> [--opt \"opts to insert at the beginning\"]\n";
+                  << "vs_to_cc --dir <path-to-win-build-directory> --to <file-to-save-json> [--revert] [--opt \"opts to insert at the beginning\"]\n";
         return 0;
     }
 
