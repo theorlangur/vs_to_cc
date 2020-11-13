@@ -63,11 +63,12 @@ std::string to_upper(std::string s)
 
 std::string find_real_name(fs::path p, std::string search)
 {
+    std::error_code err;
     fs::path cmp_against = p / search;
     for (auto& x : fs::directory_iterator(p))
     {
         fs::path xp = p / x;
-        if (fs::equivalent(xp, cmp_against))
+        if (fs::equivalent(xp, cmp_against, err))
             return x.path().filename().string();
     }
     return search;
