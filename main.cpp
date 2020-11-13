@@ -74,13 +74,13 @@ std::string find_real_name(fs::path p, std::string search)
     return search;
 }
 
-fs::path to_real_path(fs::path p, bool rev)
+fs::path to_real_path(fs::path p, bool disk_upper)
 {
     if (!p.is_absolute())
         return p;
 
     auto i = p.begin();
-    fs::path res(rev ? to_upper(i->string()) : to_lower(i->string()));
+    fs::path res(disk_upper ? to_upper(i->string()) : to_lower(i->string()));
     ++i;
     res /= *i;
     for (++i; i != p.end(); ++i)
@@ -91,7 +91,7 @@ fs::path to_real_path(fs::path p, bool rev)
     return res;
 }
 
-nl::json getEntry(fs::path const& cl_cmd, bool rev)
+nl::json getEntry(fs::path const& cl_cmd, bool disk_upper, bool rev)
 {
     nl::json res;
     std::ifstream f(cl_cmd);
@@ -114,11 +114,11 @@ nl::json getEntry(fs::path const& cl_cmd, bool rev)
                   char *pCmd = prepare_buffer(cmd, sizeof(cmd), cl_cmd);
                   std::string_view c(pCmd);
                   if (c.find_first_of("/c") == 0) {
-                      std::string fstr = to_real_path(file, rev).string();
+                      std::string fstr = to_real_path(file, disk_upper).string();
                       if (rev)
                         std::replace(fstr.begin(), fstr.end(), '\\', '/');
 
-                      std::string dstr = to_real_path(dir, rev).string();
+                      std::string dstr = to_real_path(dir, disk_upper).string();
                       if (rev)
                         std::replace(dstr.begin(), dstr.end(), '\\', '/');
                     res["file"] = fstr;
@@ -136,6 +136,7 @@ nl::json getEntry(fs::path const& cl_cmd, bool rev)
 struct Options
 {
     std::string prefixOptions;
+    bool disk_upper = false;
     bool revert = false;
 };
 
@@ -149,7 +150,7 @@ nl::json createCompileCommands(fs::path const& scan_base, Options const& opt)
             if (p.path().filename().string().find("CL.command") == 0)
             {
                 //let's get info
-                nl::json item = getEntry(p.path(), opt.revert);
+                nl::json item = getEntry(p.path(), opt.disk_upper, opt.revert);
                 if (item.is_object())
                 {
                     std::string cmd = item["command"];
@@ -192,6 +193,8 @@ int main(int argc, char *argv[])
             opts.prefixOptions += ' ';
         }else if (arg == "--revert")
             opts.revert = true;
+        else if (arg == "--disk-up")
+            opts.disk_upper = true;
         else if (arg == "--help")
             show_help = true;
     }
@@ -202,7 +205,7 @@ int main(int argc, char *argv[])
     if (show_help)
     {
         std::cout << "Usage: \n"
-                  << "vs_to_cc --dir <path-to-win-build-directory> --to <file-to-save-json> [--revert] [--opt \"opts to insert at the beginning\"]\n";
+                  << "vs_to_cc --dir <path-to-win-build-directory> --to <file-to-save-json> [--revert] [--disk-up] [--opt \"opts to insert at the beginning\"]\n";
         return 0;
     }
 
