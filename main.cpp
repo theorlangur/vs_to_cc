@@ -91,7 +91,7 @@ fs::path to_real_path(fs::path p, bool disk_upper)
     return res;
 }
 
-nl::json getEntry(fs::path const& cl_cmd, bool disk_upper, bool rev)
+nl::json getEntry(fs::path const& cl_cmd, bool disk_upper, bool rev, bool verbose)
 {
     nl::json res;
     std::ifstream f(cl_cmd);
@@ -124,12 +124,18 @@ nl::json getEntry(fs::path const& cl_cmd, bool disk_upper, bool rev)
                     res["file"] = fstr;
                     res["directory"] = dstr;
                     res["command"] = c; // as-is
-                  }
-                }
-              }
-            }
-        }
-    }
+                  }else if (verbose)
+                    std::cout << "2nd line doesn't start with '/c'. unexpected.\n";
+                }else if (verbose)
+                  std::cout << "Couldn't read 2nd line with compile command from " << cl_cmd << "\n";
+              }else if (verbose)
+                std::cout << "1st line: coudln't find '\\' and determine the directory\n";
+            }else if (verbose)
+                std::cout << "1st line doesn't start with '^'\n";
+        }else if (verbose)
+            std::cout << "Couldn't read 1st line from " << cl_cmd << "\n";
+    }else if (verbose)
+        std::cout << "Failed to open file " << cl_cmd << "\n";
     return res;
 }
 
@@ -138,6 +144,7 @@ struct Options
     std::string prefixOptions;
     bool disk_upper = false;
     bool revert = false;
+    bool verbose = false;
 };
 
 nl::json createCompileCommands(fs::path const& scan_base, Options const& opt)
@@ -150,7 +157,9 @@ nl::json createCompileCommands(fs::path const& scan_base, Options const& opt)
             if (p.path().filename().string().find("CL.command") == 0)
             {
                 //let's get info
-                nl::json item = getEntry(p.path(), opt.disk_upper, opt.revert);
+                if (opt.verbose)
+                    std::cout << "Found CL.command file at " << p.path() << "\n";
+                nl::json item = getEntry(p.path(), opt.disk_upper, opt.revert, opt.verbose);
                 if (item.is_object())
                 {
                     std::string cmd = item["command"];
@@ -195,6 +204,8 @@ int main(int argc, char *argv[])
             opts.revert = true;
         else if (arg == "--disk-up")
             opts.disk_upper = true;
+        else if (arg == "--verbose")
+            opts.verbose = true;
         else if (arg == "--help")
             show_help = true;
     }
@@ -205,7 +216,7 @@ int main(int argc, char *argv[])
     if (show_help)
     {
         std::cout << "Usage: \n"
-                  << "vs_to_cc --dir <path-to-win-build-directory> --to <file-to-save-json> [--revert] [--disk-up] [--opt \"opts to insert at the beginning\"]\n";
+                  << "vs_to_cc --dir <path-to-win-build-directory> --to <file-to-save-json> [--verbose] [--revert] [--disk-up] [--opt \"opts to insert at the beginning\"]\n";
         return 0;
     }
 
