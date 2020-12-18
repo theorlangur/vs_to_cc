@@ -91,52 +91,52 @@ fs::path to_real_path(fs::path p, bool disk_upper)
     return res;
 }
 
-nl::json getEntry(fs::path const& cl_cmd, bool disk_upper, bool rev, bool verbose)
+nl::json getEntry(fs::path const& cl_cmd, std::ifstream &f, bool disk_upper, bool rev, bool verbose)
 {
-    nl::json res;
-    std::ifstream f(cl_cmd);
-    if (f)
-    {
-        char buf[2048];
-        std::fill_n(buf, sizeof(buf), 0);
-        if (f.getline(buf, sizeof(buf)))
-        {
-            char *pBuf = prepare_buffer(buf, sizeof(buf), cl_cmd);
-            if (pBuf[0] == '^')
-            {
-              std::string_view file(pBuf + 1);
-              auto slash = file.find_last_of('\\');
-              if (slash != file.npos) {
-                std::string_view dir(file.data(), slash + 1);
-                char cmd[2048];
+	nl::json res;
+	char buf[2048];
+	std::fill_n(buf, sizeof(buf), 0);
+	if (f.getline(buf, sizeof(buf)))
+	{
+		char* pBuf = prepare_buffer(buf, sizeof(buf), cl_cmd);
+		if (pBuf[0] == '^')
+		{
+			std::string_view file(pBuf + 1);
+			auto slash = file.find_last_of('\\');
+			if (slash != file.npos) {
+				std::string_view dir(file.data(), slash + 1);
+				char cmd[2048];
 				std::fill_n(cmd, sizeof(cmd), 0);
-                if (f.getline(cmd, sizeof(cmd))) {
-                  char *pCmd = prepare_buffer(cmd, sizeof(cmd), cl_cmd);
-                  std::string_view c(pCmd);
-                  if (c.find_first_of("/c") == 0) {
-                      std::string fstr = to_real_path(file, disk_upper).string();
-                      if (rev)
-                        std::replace(fstr.begin(), fstr.end(), '\\', '/');
+				if (f.getline(cmd, sizeof(cmd))) {
+					char* pCmd = prepare_buffer(cmd, sizeof(cmd), cl_cmd);
+					std::string_view c(pCmd);
+					if (c.find_first_of("/c") == 0) {
+						std::string fstr = to_real_path(file, disk_upper).string();
+						if (rev)
+							std::replace(fstr.begin(), fstr.end(), '\\', '/');
 
-                      std::string dstr = to_real_path(dir, disk_upper).string();
-                      if (rev)
-                        std::replace(dstr.begin(), dstr.end(), '\\', '/');
-                    res["file"] = fstr;
-                    res["directory"] = dstr;
-                    res["command"] = c; // as-is
-                  }else if (verbose)
-                    std::cout << "2nd line doesn't start with '/c'. unexpected.\n";
-                }else if (verbose)
-                  std::cout << "Couldn't read 2nd line with compile command from " << cl_cmd << "\n";
-              }else if (verbose)
-                std::cout << "1st line: coudln't find '\\' and determine the directory\n";
-            }else if (verbose)
-                std::cout << "1st line doesn't start with '^'\n";
-        }else if (verbose)
-            std::cout << "Couldn't read 1st line from " << cl_cmd << "\n";
-    }else if (verbose)
-        std::cout << "Failed to open file " << cl_cmd << "\n";
-    return res;
+						std::string dstr = to_real_path(dir, disk_upper).string();
+						if (rev)
+							std::replace(dstr.begin(), dstr.end(), '\\', '/');
+						res["file"] = fstr;
+						res["directory"] = dstr;
+						res["command"] = c; // as-is
+					}
+					else if (verbose)
+						std::cout << "2nd line doesn't start with '/c'. unexpected.\n";
+				}
+				else if (verbose)
+					std::cout << "Couldn't read 2nd line with compile command from " << cl_cmd << "\n";
+			}
+			else if (verbose)
+				std::cout << "1st line: coudln't find '\\' and determine the directory\n";
+		}
+		else if (verbose)
+			std::cout << "1st line doesn't start with '^'\n";
+	}
+	else if (verbose)
+		std::cout << "Couldn't read 1st line from " << cl_cmd << "\n";
+	return res;
 }
 
 struct Options
@@ -146,6 +146,28 @@ struct Options
     bool revert = false;
     bool verbose = false;
 };
+
+void getAllEntries(fs::path const& cl_cmd, nl::json &res, Options const& opt)
+{
+    std::ifstream f(cl_cmd);
+    if (f)
+    {
+        nl::json item;
+        while ((item = getEntry(cl_cmd, f, opt.disk_upper, opt.revert, opt.verbose)).is_object())
+        {
+			std::string cmd = item["command"];
+			if (!opt.prefixOptions.empty())
+				cmd.insert(0, opt.prefixOptions);
+
+			cmd.insert(0, "clang-cl.exe ");
+			item["command"] = cmd;
+
+			res.push_back(item);
+        }
+    }
+    else if (opt.verbose)
+        std::cout << "Failed to open file " << cl_cmd << "\n";
+}
 
 nl::json createCompileCommands(fs::path const& scan_base, Options const& opt)
 {
@@ -159,18 +181,7 @@ nl::json createCompileCommands(fs::path const& scan_base, Options const& opt)
                 //let's get info
                 if (opt.verbose)
                     std::cout << "Found CL.command file at " << p.path() << "\n";
-                nl::json item = getEntry(p.path(), opt.disk_upper, opt.revert, opt.verbose);
-                if (item.is_object())
-                {
-                    std::string cmd = item["command"];
-                    if (!opt.prefixOptions.empty())
-                      cmd.insert(0, opt.prefixOptions);
-
-                    cmd.insert(0, "clang-cl.exe ");
-                    item["command"] = cmd;
-
-                    res.push_back(item);
-                }
+                getAllEntries(p.path(), res, opt);
             }
         }
     }
