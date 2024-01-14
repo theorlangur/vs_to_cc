@@ -120,6 +120,24 @@ nl::json getEntry(fs::path const& cl_cmd, std::ifstream &f, bool disk_upper, boo
 							std::replace(dstr.begin(), dstr.end(), '\\', '/');
 						res["file"] = fstr;
 						res["directory"] = dstr;
+						{
+						    char *pCmdCorrection = pCmd;
+						    while(*pCmdCorrection)
+						    {
+							if ((*pCmdCorrection >= 'A' && *pCmdCorrection <= 'Z')
+							    && (*(pCmdCorrection+1) == ':')
+							    && (*(pCmdCorrection+2) == '\\')
+							    )
+							{
+							    if (disk_upper)
+								*pCmdCorrection = toupper(*pCmdCorrection);
+							    else
+								*pCmdCorrection = tolower(*pCmdCorrection);
+							    pCmdCorrection += 3;
+							}else
+							    ++pCmdCorrection;
+						    }
+						}
 						res["command"] = c; // as-is
 					}
 					else if (verbose)
