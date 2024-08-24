@@ -65,11 +65,25 @@ std::string find_real_name(fs::path p, std::string search)
 {
     std::error_code err;
     fs::path cmp_against = p / search;
-    for (auto& x : fs::directory_iterator(p))
+    for (auto& x : fs::directory_iterator(p, fs::directory_options::skip_permission_denied))
     {
         fs::path xp = p / x;
         if (fs::equivalent(xp, cmp_against, err))
+	{
+	    //try if a directory iterator can be created
+	    try
+	    {
+		if (x.is_directory())
+		{
+		    auto iter = fs::directory_iterator(xp);
+		    iter->exists();
+		}
+	    }catch(...)
+	    {
+		continue;
+	    }
             return x.path().filename().string();
+	}
     }
     return search;
 }
@@ -190,7 +204,7 @@ void getAllEntries(fs::path const& cl_cmd, nl::json &res, Options const& opt)
 nl::json createCompileCommands(fs::path const& scan_base, Options const& opt)
 {
     nl::json res;
-    for(auto& p : fs::recursive_directory_iterator(scan_base))
+    for(auto& p : fs::recursive_directory_iterator(scan_base, fs::directory_options::skip_permission_denied))
     {
         if (p.is_regular_file() && p.path().extension() == ".tlog")
         {
